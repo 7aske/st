@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=St
+Icon=
+StartupWMClass=St
+Comment=suckless.org terminal
+Exec=/usr/local/bin/st
+Type=Application
+Categories=Terminal
+StartupNotify=true

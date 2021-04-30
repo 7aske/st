@@ -47,9 +47,11 @@ install: st
 	cp -f st $(DESTDIR)$(PREFIX)/bin
 	cp -f st-copyout $(DESTDIR)$(PREFIX)/bin
 	cp -f st-urlhandler $(DESTDIR)$(PREFIX)/bin
+	cp -f st.desktop $(DESTDIR)$(PREFIX)/share/applications
 	chmod 755 $(DESTDIR)$(PREFIX)/bin/st
 	chmod 755 $(DESTDIR)$(PREFIX)/bin/st-copyout
 	chmod 755 $(DESTDIR)$(PREFIX)/bin/st-urlhandler
+	chmod 644 $(DESTDIR)$(PREFIX)/share/applications/st.desktop
 	mkdir -p $(DESTDIR)$(MANPREFIX)/man1
 	sed "s/VERSION/$(VERSION)/g" < st.1 > $(DESTDIR)$(MANPREFIX)/man1/st.1
 	chmod 644 $(DESTDIR)$(MANPREFIX)/man1/st.1
@@ -61,5 +63,6 @@ uninstall:
 	rm -f $(DESTDIR)$(PREFIX)/bin/st-copyout
 	rm -f $(DESTDIR)$(PREFIX)/bin/st-urlhandler
 	rm -f $(DESTDIR)$(MANPREFIX)/man1/st.1
+	rm -f $(DESTDIR)$(PREFIX)/share/applications/st.desktop
 
 .PHONY: all options clean dist install uninstall
