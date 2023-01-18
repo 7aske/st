@@ -1,6 +1,8 @@
-st
 *.o
-pkg/
+*.orig
 *.pkg.tar.xz
-patches
+.gitignore
 .idea
+patches
+pkg/
+st
