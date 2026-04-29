@@ -182,6 +182,7 @@ static void xunloadfont(Font *);
 static void xunloadfonts(void);
 static void xsetenv(void);
 static void xseturgency(int);
+static void xsetmousecursor(int);
 static int evcol(XEvent *);
 static int evrow(XEvent *);
 static float clamp(float, float, float);
@@ -195,6 +196,8 @@ static void resize(XEvent *);
 static void focus(XEvent *);
 static uint buttonmask(uint);
 static int mouseaction(XEvent *, uint);
+static int updatelinkhover(int, int, uint);
+static void openlinkat(XEvent *);
 static void brelease(XEvent *);
 static void bpress(XEvent *);
 static void bmotion(XEvent *);
@@ -279,6 +282,15 @@ static char *opt_cd    = NULL;
 static int focused = 0;
 
 static int oldbutton = 3; /* button event on startup: 3 = release */
+static Cursor xcursor = None;
+static Cursor xcursorlink = None;
+static int xcursorislink = 0;
+static struct {
+	int active;
+	int row;
+	int start;
+	int end;
+} xlinkhover = { 0, -1, 0, 0 };
 static uint buttons; /* bit field of pressed buttons */
 
 void
@@ -505,6 +517,74 @@ mouseaction(XEvent *e, uint release)
 	return 0;
 }
 
+static void
+openlinkat(XEvent *e)
+{
+	int col, row, x0, x1;
+	char *uri;
+	pid_t pid;
+
+	col = evcol(e);
+	row = evrow(e);
+	uri = getlinkat(col, row, &x0, &x1);
+	if (!uri)
+		return;
+
+	pid = fork();
+	if (pid == 0) {
+		execlp("xdg-open", "xdg-open", uri, (char *)NULL);
+		_exit(127);
+	}
+
+	free(uri);
+}
+
+static int
+updatelinkhover(int col, int row, uint state)
+{
+	int active = 0, x0 = 0, x1 = 0;
+	int target_row = -1, target_start = 0, target_end = 0;
+	int changed;
+	char *uri;
+
+	if (state & ControlMask) {
+		uri = getlinkat(col, row, &x0, &x1);
+		if (uri) {
+			active = 1;
+			target_row = row;
+			target_start = x0;
+			target_end = x1;
+			free(uri);
+		}
+	}
+
+	changed = xlinkhover.active != active ||
+	          xlinkhover.row != target_row ||
+	          xlinkhover.start != target_start ||
+	          xlinkhover.end != target_end;
+
+	if (active) {
+		xlinkhover.active = 1;
+		xlinkhover.row = target_row;
+		xlinkhover.start = target_start;
+		xlinkhover.end = target_end;
+	} else {
+		xlinkhover.active = 0;
+		xlinkhover.row = target_row;
+		xlinkhover.start = target_start;
+		xlinkhover.end = target_end;
+	}
+	if (xcursorislink != active) {
+		xsetmousecursor(active);
+		xcursorislink = active;
+	}
+
+	if (changed)
+		redraw();
+
+	return active;
+}
+
 void
 bpress(XEvent *e)
 {
@@ -514,6 +594,12 @@ bpress(XEvent *e)
 
 	if (1 <= btn && btn <= 11)
 		buttons |= 1 << (btn-1);
+
+	if (btn == Button1 && (e->xbutton.state & ControlMask)) {
+		if (updatelinkhover(evcol(e), evrow(e), e->xbutton.state))
+			openlinkat(e);
+		return;
+	}
 
 	if (IS_SET(MODE_MOUSE) && !(e->xbutton.state & forcemousemod)) {
 		mousereport(e);
@@ -756,6 +842,8 @@ brelease(XEvent *e)
 void
 bmotion(XEvent *e)
 {
+	updatelinkhover(evcol(e), evrow(e), e->xbutton.state);
+
 	if (IS_SET(MODE_MOUSE) && !(e->xbutton.state & forcemousemod)) {
 		mousereport(e);
 		return;
@@ -1283,7 +1371,6 @@ void
 xinit(int cols, int rows)
 {
 	XGCValues gcvalues;
-	Cursor cursor;
 	Window parent;
 	pid_t thispid = getpid();
 	XColor xmousefg, xmousebg;
@@ -1331,7 +1418,8 @@ xinit(int cols, int rows)
 	xw.attrs.bit_gravity = NorthWestGravity;
 	xw.attrs.event_mask = FocusChangeMask | KeyPressMask | KeyReleaseMask
 		| ExposureMask | VisibilityChangeMask | StructureNotifyMask
-		| ButtonMotionMask | ButtonPressMask | ButtonReleaseMask;
+			| PointerMotionMask | ButtonMotionMask
+			| ButtonPressMask | ButtonReleaseMask;
 	xw.attrs.colormap = xw.cmap;
 
 	xw.win = XCreateWindow(xw.dpy, parent, xw.l, xw.t,
@@ -1359,8 +1447,9 @@ xinit(int cols, int rows)
 	}
 
 	/* white cursor, black outline */
-	cursor = XCreateFontCursor(xw.dpy, mouseshape);
-	XDefineCursor(xw.dpy, xw.win, cursor);
+	xcursor = XCreateFontCursor(xw.dpy, mouseshape);
+	xcursorlink = XCreateFontCursor(xw.dpy, XC_hand2);
+	XDefineCursor(xw.dpy, xw.win, xcursor);
 
 	if (XParseColor(xw.dpy, xw.cmap, colorname[mousefg], &xmousefg) == 0) {
 		xmousefg.red   = 0xffff;
@@ -1374,7 +1463,8 @@ xinit(int cols, int rows)
 		xmousebg.blue  = 0x0000;
 	}
 
-	XRecolorCursor(xw.dpy, cursor, &xmousefg, &xmousebg);
+	XRecolorCursor(xw.dpy, xcursor, &xmousefg, &xmousebg);
+	XRecolorCursor(xw.dpy, xcursorlink, &xmousefg, &xmousebg);
 
 	xw.xembed = XInternAtom(xw.dpy, "_XEMBED", False);
 	xw.wmdeletewin = XInternAtom(xw.dpy, "WM_DELETE_WINDOW", False);
@@ -1801,6 +1891,12 @@ xseticontitle(char *p)
 }
 
 void
+xsetmousecursor(int link)
+{
+	XDefineCursor(xw.dpy, xw.win, link ? xcursorlink : xcursor);
+}
+
+void
 xsettitle(char *p)
 {
 	XTextProperty prop;
@@ -1833,6 +1929,9 @@ xdrawline(Line line, int x1, int y1, int x2)
 		new = line[x];
 		if (new.mode == ATTR_WDUMMY)
 			continue;
+		if (xlinkhover.active && y1 == xlinkhover.row &&
+		    BETWEEN(x, xlinkhover.start, xlinkhover.end))
+			new.mode |= ATTR_UNDERLINE;
 		if (selected(x, y1))
 			new.mode ^= ATTR_REVERSE;
 		if (i > 0 && ATTRCMP(base, new)) {

@@ -661,6 +661,80 @@ getsel(void)
 	return str;
 }
 
+static int
+islinkbreak(Rune u)
+{
+	return u == 0 || u <= ' ' || wcschr(L"\"'`<>[]{}()|\\", u) != NULL;
+}
+
+static int
+islinktrim(Rune u)
+{
+	return wcschr(L".,;:!?)]}\"'`", u) != NULL;
+}
+
+static int
+isvalidlink(const char *s)
+{
+	return strstr(s, "://") != NULL ||
+	       strncmp(s, "www.", 4) == 0 ||
+	       strncmp(s, "mailto:", 7) == 0;
+}
+
+char *
+getlinkat(int col, int row, int *start, int *end)
+{
+	const Glyph *gp;
+	char *str, *ptr;
+	int linelen, x0, x1, i;
+
+	if (!BETWEEN(row, 0, term.row - 1))
+		return NULL;
+
+	linelen = tlinelen(row);
+	if (!BETWEEN(col, 0, linelen - 1))
+		return NULL;
+
+	while (col > 0 && (TLINE(row)[col].mode & ATTR_WDUMMY))
+		col--;
+
+	gp = &TLINE(row)[col];
+	if (islinkbreak(gp->u))
+		return NULL;
+
+	x0 = x1 = col;
+	while (x0 > 0 && !islinkbreak(TLINE(row)[x0 - 1].u))
+		x0--;
+	while (x1 + 1 < linelen && !islinkbreak(TLINE(row)[x1 + 1].u))
+		x1++;
+
+	while (x1 >= x0 && islinktrim(TLINE(row)[x1].u))
+		x1--;
+	if (x1 < x0 || col < x0 || col > x1)
+		return NULL;
+
+	str = xmalloc((x1 - x0 + 2) * UTF_SIZ);
+	ptr = str;
+	for (i = x0; i <= x1; ++i) {
+		gp = &TLINE(row)[i];
+		if (gp->mode & ATTR_WDUMMY)
+			continue;
+		ptr += utf8encode(gp->u, ptr);
+	}
+	*ptr = '\0';
+
+	if (!isvalidlink(str)) {
+		free(str);
+		return NULL;
+	}
+
+	if (start)
+		*start = x0;
+	if (end)
+		*end = x1;
+	return str;
+}
+
 void
 selclear(void)
 {

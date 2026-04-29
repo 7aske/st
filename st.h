@@ -112,6 +112,7 @@ void selstart(int, int, int);
 void selextend(int, int, int, int);
 int selected(int, int);
 char *getsel(void);
+char *getlinkat(int, int, int *, int *);
 
 size_t utf8encode(Rune, char *);
 
