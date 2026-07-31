@@ -5,8 +5,8 @@
  *
  * font: see http://freedesktop.org/software/fontconfig/fontconfig-user.html
  */
-static char *font = "FiraCode-Regular:size=10:antialias=true:autohint=true";
-static char *font2[] = { "JoyPixels:size=10:antialias=true:autohint=true" };
+static char *font = "FiraCode-Regular:size=12:antialias=true:autohint=true";
+static char *font2[] = { "JoyPixels:size=12:antialias=true:autohint=true" };
 static int borderpx = 0;
 
 /*
@@ -107,7 +107,7 @@ char *termname = "st-256color";
 unsigned int tabspaces = 8;
 
 /* bg opacity */
-float alpha = 0.8;
+float alpha = 0.90;
 float alphaOffset = 0;
 float alphaUnfocus;
 
